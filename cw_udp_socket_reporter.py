@@ -8,7 +8,7 @@ import subprocess
 import time
 
 
-__version__ = '1.1.1'
+__version__ = '1.1.2'
 
 
 logger = logging.getLogger(__name__)
@@ -117,14 +117,14 @@ def report_cw_put(cw, dt, received, wrong, missed, dim):
         dimensions=dim)
 
 
-def report_cw(args, dt, tdiff, received, wrong, missed, region):
+def report_cw(args, dt, tdiff, received, wrong, missed):
     import boto.ec2.cloudwatch
-    cw = boto.ec2.cloudwatch.connect_to_region(region)
+    cw = boto.ec2.cloudwatch.connect_to_region(args.region)
     dim = {'InstanceId': get_instance_id()}
     report_cw_put(cw, dt, received, wrong, missed, dim)
     logging.info('reported instance stats to CloudWatch')
     if args.cw_asg:
-        asg = get_autoscaling_group_name(region)
+        asg = get_autoscaling_group_name(args.region)
         if asg is None:
             logger.error('report_cw: Auto Scaling Group name not found, '
                          'not reporting to CloudWatch')
@@ -162,10 +162,22 @@ def report(args):
                     str(args.rate_sample_time) + 's')
         return
     received = s['received'] - s_prev['received']
+    if received < 0:
+        logger.error("received was < 0. old val: %s, new val: %s",
+                     s_prev['received'], s['received'])
+        return
     wrong = s['wrong'] - s_prev['wrong']
+    if wrong < 0:
+        logger.error("wrong was < 0. old val: %s, new val: %s",
+                     s_prev['wrong'], s['wrong'])
+        return
     missed = s['missed'] - s_prev['missed']
+    if missed < 0:
+        logger.error("missed was < 0. old val: %s, new val: %s",
+                     s_prev['missed'], s['missed'])
+        return
     if args.to_cloudwatch:
-        report_cw(args, s['dt'], tdiff, received, wrong, missed, args.region)
+        report_cw(args, s['dt'], tdiff, received, wrong, missed)
     if args.to_stdout:
         report_stdout(args, s['dt'], tdiff, received, wrong, missed)
 
