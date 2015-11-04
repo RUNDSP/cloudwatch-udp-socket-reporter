@@ -162,8 +162,20 @@ def report(args):
                     str(args.rate_sample_time) + 's')
         return
     received = s['received'] - s_prev['received']
+    if received < 0:
+        logger.error("received was < 0. old val: %s, new val: %s",
+                     s_prev['received'], s['received'])
+        return
     wrong = s['wrong'] - s_prev['wrong']
+    if wrong < 0:
+        logger.error("wrong was < 0. old val: %s, new val: %s",
+                     s_prev['wrong'], s['wrong'])
+        return
     missed = s['missed'] - s_prev['missed']
+    if missed < 0:
+        logger.error("missed was < 0. old val: %s, new val: %s",
+                     s_prev['missed'], s['missed'])
+        return
     if args.to_cloudwatch:
         report_cw(args, s['dt'], tdiff, received, wrong, missed)
     if args.to_stdout:
