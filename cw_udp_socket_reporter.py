@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 r_recv = re.compile(' ([0-9]+) packets received')
 r_wrong = re.compile(' ([0-9]+) packets to unknown port received')
 r_miss = re.compile(' ([0-9]+) packet receive errors')
+r_sent = re.compile(' ([0-9]+) packets sent')
 
 
 def get_args():
@@ -46,6 +47,7 @@ def gen_stats():
         'received': int(r_recv.search(ns).groups(0)[0]),
         'wrong': int(r_wrong.search(ns).groups(0)[0]),
         'missed': int(r_miss.search(ns).groups(0)[0]),
+        'sent': int(r_sent.search(ns).groups(0)[0]),
         'dt': datetime.datetime.now(),
     }
 
@@ -93,7 +95,7 @@ def get_autoscaling_group_name(region):
     return instances[0].tags[tag]
 
 
-def report_cw_put(cw, dt, received, wrong, missed, dim):
+def report_cw_put(cw, dt, received, wrong, missed, dim, sent):
     cw.put_metric_data(
         namespace='System/Linux',
         name='UdpRxSuccess',
@@ -115,13 +117,20 @@ def report_cw_put(cw, dt, received, wrong, missed, dim):
         unit='Count',
         timestamp=dt,
         dimensions=dim)
+    cw.put_metric_data(
+        namespace='System/Linux',
+        name='UdpTx',
+        value=sent,
+        unit='Count',
+        timestamp=dt,
+        dimensions=dim)
 
 
-def report_cw(args, dt, tdiff, received, wrong, missed):
+def report_cw(args, dt, tdiff, received, wrong, missed, sent):
     import boto.ec2.cloudwatch
     cw = boto.ec2.cloudwatch.connect_to_region(args.region)
     dim = {'InstanceId': get_instance_id()}
-    report_cw_put(cw, dt, received, wrong, missed, dim)
+    report_cw_put(cw, dt, received, wrong, missed, dim, sent)
     logging.info('reported instance stats to CloudWatch')
     if args.cw_asg:
         asg = get_autoscaling_group_name(args.region)
@@ -130,22 +139,24 @@ def report_cw(args, dt, tdiff, received, wrong, missed):
                          'not reporting to CloudWatch')
         else:
             dim = {'AutoScalingGroupName': asg}
-            report_cw_put(cw, dt, received, wrong, missed, dim)
+            report_cw_put(cw, dt, received, wrong, missed, dim, sent)
             logging.info('reported asg stats to CloudWatch')
 
 
-def report_stdout(args, dt, tdiff, received, wrong, missed):
+def report_stdout(args, dt, tdiff, received, wrong, missed, sent):
     if args.show_rates:
         print(
-            '{} - {} qps receive - {} qps wrong port - {} qps miss'
+            '{} - {} qps receive - {} qps wrong port - {} qps miss -'
+            ' {} qps sent'
             .format(
                 dt,
                 received / tdiff,
                 wrong / tdiff,
-                missed / tdiff))
+                missed / tdiff,
+                sent / tdiff))
     else:
-        print('{} - {} qps receive - {} qps wrong port - {} qps miss'
-              .format(dt, received, wrong, missed))
+        print('{} - {} receive - {} wrong port - {} miss - {} sent'
+              .format(dt, received, wrong, missed, sent))
 
 
 def report(args):
@@ -176,10 +187,15 @@ def report(args):
         logger.error("missed was < 0. old val: %s, new val: %s",
                      s_prev['missed'], s['missed'])
         return
+    sent = s['sent'] - s_prev['sent']
+    if sent < 0:
+        logger.error("sent was < 0. old val: %s, new val: %s",
+                     s_prev['sent'], s['sent'])
+        return
     if args.to_cloudwatch:
-        report_cw(args, s['dt'], tdiff, received, wrong, missed)
+        report_cw(args, s['dt'], tdiff, received, wrong, missed, sent)
     if args.to_stdout:
-        report_stdout(args, s['dt'], tdiff, received, wrong, missed)
+        report_stdout(args, s['dt'], tdiff, received, wrong, missed, sent)
 
 
 def main(args):
