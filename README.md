@@ -7,6 +7,7 @@ Reports UDP socket statistics to CloudWatch:
   was bound ("unknown port" in netstat)
 * `UdpRxDropped`: datagrams which did not make it into a socket's receive
   buffer because the buffer was full
+* `UdpTx`: datagrams sent
 
 The metrics are reported under the `System/Linux` namespace
 ("Linux System" in the CloudWatch console).
