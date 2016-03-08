@@ -42,7 +42,7 @@ def get_args():
 
 
 def gen_stats():
-    ns = subprocess.check_output(['netstat', '-su'])
+    ns = subprocess.check_output('netstat -su || true', shell=True)
     return {
         'received': int(r_recv.search(ns).groups(0)[0]),
         'wrong': int(r_wrong.search(ns).groups(0)[0]),
